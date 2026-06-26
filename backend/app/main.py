@@ -1,14 +1,21 @@
 from fastapi import FastAPI
 
-from app.api.test_db import router
+from app.database.base import Base
+from app.database.database import engine
+
+# Import all models
+import app.models
+
+from app.api.auth import router as auth_router
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Enterprise AI Knowledge Assistant",
     version="1.0.0"
 )
 
-app.include_router(router)
-
+app.include_router(auth_router)
 
 @app.get("/")
 def home():

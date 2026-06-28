@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from app.database.base import Base
 from app.database.database import engine
-
+from app.api.chat import router as chat_router
 # Import all models
 import app.models
 
@@ -16,6 +16,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(chat_router)
 
 @app.get("/")
 def home():

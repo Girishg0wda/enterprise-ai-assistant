@@ -24,3 +24,11 @@ def create_conversation(
         db.rollback()
         raise
     return db_conversation
+
+def get_user_conversations(db: Session, user: User) -> list[Conversation]:
+    return(
+        db.query(Conversation)
+        .filter(Conversation.user_id == user.id)
+        .order_by(Conversation.updated_at.desc())
+        .all()
+    )

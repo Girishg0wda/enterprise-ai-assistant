@@ -8,7 +8,10 @@ from app.schemas.conversation import (
     ConversationCreate,
     ConversationResponse,
 )
-from app.services.chat_service import create_conversation
+from app.services.chat_service import (
+    create_conversation,
+    get_user_conversations
+)
 
 router = APIRouter(
     prefix="/chat",
@@ -31,3 +34,18 @@ def create_new_conversation(
         user=current_user,
         conversation_data=conversation,
     )
+
+
+@router.get(
+    "/conversations",
+    response_model=list[ConversationResponse],
+    status_code=status.HTTP_200_OK
+)
+def list_conversations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+): 
+    return get_user_conversations(
+        db=db, 
+        user=current_user
+        )

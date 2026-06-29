@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException  
 from sqlalchemy.orm import Session
 
 from app.database.database import get_db
@@ -10,8 +10,14 @@ from app.schemas.conversation import (
 )
 from app.services.chat_service import (
     create_conversation,
-    get_user_conversations
+    get_user_conversations,
+    create_message_in_conversation
 )
+from app.schemas.message import (
+    MessageCreate,
+    MessageResponse
+)
+
 
 router = APIRouter(
     prefix="/chat",
@@ -48,4 +54,29 @@ def list_conversations(
     return get_user_conversations(
         db=db, 
         user=current_user
+    )
+
+@router.post(
+    "/messages",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def send_message(
+    message_input: MessageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+   
+    new_message = create_message_in_conversation(
+        db=db,
+        user=current_user,
+        message_data=message_input,
+        role="user"
+    )
+
+    if not new_message:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
         )
+    return new_message

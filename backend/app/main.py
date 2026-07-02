@@ -16,7 +16,7 @@ from app.services.vector_service import vector_service
 
 logger = logging.getLogger(__name__)
 
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

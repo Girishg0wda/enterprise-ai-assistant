@@ -1,15 +1,16 @@
+import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
-from pprint import pprint
+from typing import List, Dict
 
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
 from app.schemas.conversation import ConversationCreate
 from app.schemas.message import MessageCreate
-from app.services.llm_service import llm_service
-from backend.app.services.prompt_service import prompt_builder  
+from app.services.prompt_service import prompt_service 
 
+logger = logging.getLogger(__name__)
 
 def create_conversation(db: Session, user: User, conversation_data: ConversationCreate) -> Conversation:
     db_conversation = Conversation(user_id=user.id, title=conversation_data.title)
@@ -26,69 +27,46 @@ def get_user_conversations(db: Session, user: User) -> list[Conversation]:
         .all()
     )
 
-def create_message_in_conversation(
-    db: Session,
-    user: User,
-    message_data: MessageCreate,
-    role: str = "user"
-) -> Message:
-    # 1. Isolation boundary validation
-    conversation = db.query(Conversation).filter(
-        Conversation.id == message_data.conversation_id,
-        Conversation.user_id == user.id
-    ).first()
-
-    if not conversation:
-        return None  
-
-    # 2. Persistent logging of user message
-    user_token_est = len(message_data.content.split())
-    db_user_message = Message(
-        conversation_id=message_data.conversation_id,
-        role="user",
-        content=message_data.content,
-        token_count=max(1, user_token_est)
+def save_raw_db_message(db: Session, conversation_id: int, role: str, content: str) -> Message:
+    """Helper utility to save an incoming or inferred message securely to Postgres."""
+    token_est = max(1, len(content.split()))
+    db_msg = Message(
+        conversation_id=conversation_id,
+        role=role,
+        content=content,
+        token_count=token_est
     )
-    db.add(db_user_message)
-    
-    # 3. Pull historical context
-    history = (
+    db.add(db_msg)
+    db.commit()
+    db.refresh(db_msg)
+    return db_msg
+
+def get_sliding_window_history(db: Session, conversation_id: int, limit: int = 10) -> List[Dict[str, str]]:
+    """
+    🚀 Core Phase 1 Memory Rule:
+    Pull the last 10 messages DESCENDING, then reverse them chronologically 
+    so the oldest of the 10 comes first in the LLM prompt context payload.
+    """
+    recent_messages = (
         db.query(Message)
-        .filter(Message.conversation_id == conversation.id)
-        .order_by(Message.created_at.asc())
+        .filter(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(limit)
         .all()
     )
 
-    # 4. Extract raw conversational log array
-    history_payload = [{"role": msg.role, "content": msg.content} for msg in history]
-    if not any(m["content"] == message_data.content for m in history_payload):
-        history_payload.append({"role": "user", "content": message_data.content})
+    # Reverse back to maintain proper temporal conversation flow
+    chronological_messages = reversed(recent_messages)
 
-    # 5. Delegate prompt building to the specialized builder layer
-    # We pass the user's name from current_user directly into the system template
-    llm_payload = prompt_builder.build_chat_messages(
-        history_messages=history_payload,
-        user_name=getattr(user, "username", "User")
+    formatted_history = []
+    total_characters = 0
+    for msg in chronological_messages:
+        formatted_history.append({"role": msg.role, "content": msg.content})
+        total_characters += len(msg.content)
+
+    # 📊 Measure prompt history memory size in logs (Rule 4)
+    logger.info(
+        f"📊 [Memory Matrix] Bounded sliding window extracted {len(formatted_history)} records. "
+        f"Estimated history segment payload weight: ~{total_characters // 4} tokens."
     )
-    print("\n========== LLM PAYLOAD ==========")
-    pprint(llm_payload)
-    print("=================================\n")
-    # 6. Fire execution over to Groq
-    llm_result = llm_service.generate_response(messages=llm_payload)
-
-    # 7. Write AI record back to persistence
-    db_assistant_message = Message(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=llm_result["content"],
-        token_count=llm_result["completion_tokens"]
-    )
-    db.add(db_assistant_message)
-
-    # 8. Advance timestamp milestone
-    conversation.updated_at = datetime.utcnow()
-    
-    db.commit()
-    db.refresh(db_assistant_message)
-
-    return db_assistant_message
+    return formatted_history

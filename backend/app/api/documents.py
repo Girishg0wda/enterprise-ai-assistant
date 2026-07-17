@@ -6,7 +6,7 @@ from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.services.document_service import document_service
-from app.tasks.document_tasks import process_document_pipeline
+from app.tasks.document_tasks import process_document_pipeline, handle_failed_document
 from app.core.celery_app import celery_app
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -36,7 +36,7 @@ def upload_enterprise_document(
 
     process_document_pipeline.apply_async(
         args=[db_doc.id],
-        link_error=celery_app.tasks["tasks.handle_failed_document"].s(db_doc.id)
+        link_error=handle_failed_document.s(db_doc.id)
     )
 
     return db_doc

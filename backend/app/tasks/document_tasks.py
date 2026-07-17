@@ -65,3 +65,23 @@ def process_document_pipeline(self, document_id: int):
     finally:
         if 'db' in locals() and db:
             db.close()
+
+
+@celery_app.task(name="tasks.handle_failed_document")
+def handle_failed_document(document_id: int):
+    """Handle failed document ingestion by updating the status and logging the failure."""
+    db = SessionLocal()
+    try:
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        if not doc:
+            logger.error(f"Failed callback invoked for missing Document ID {document_id}")
+            return
+
+        doc.status = DocumentStatus.FAILED
+        doc.error_message = "Ingestion failed after Celery retries. Please inspect worker logs."
+        db.commit()
+        logger.error(f"❌ [Failure Callback] Document ID {document_id} marked FAILED by link_error callback.")
+    except Exception as exc:
+        logger.error(f"Failed to execute handle_failed_document callback for Document ID {document_id}: {exc}")
+    finally:
+        db.close()

@@ -1,5 +1,5 @@
-from app.models.user import User
-from app.models.conversation import Conversation
-from app.models.message import Message
-from app.models.document_chunk import DocumentChunk
-from app.models.chat import Conversation, Message
+from .user import User
+from .document import Document
+from .document_chunk import DocumentChunk
+from .conversation import Conversation
+from .message import Message

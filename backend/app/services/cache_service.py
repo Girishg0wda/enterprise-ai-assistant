@@ -8,11 +8,10 @@ logger = logging.getLogger(__name__)
 
 class ResponseCacheService:
     def __init__(self):
-        # Hooks directly into your existing operational redis container on port 6379
-        self.redis_client = redis.Redis(
-            host=settings.REDIS_HOST if hasattr(settings, 'REDIS_HOST') else 'localhost',
-            port=6379,
-            db=1,  # Using isolated DB index 1 to keep cache clear of celery queues
+        # Use the configured Redis URL so Docker container networking works correctly.
+        self.redis_client = redis.from_url(
+            settings.REDIS_URL,
+            db=1,  # Using isolated DB index 1 to keep cache clear of Celery queues
             decode_responses=True
         )
         self.default_ttl = 86400  # 24 Hours absolute cache expiration lifespans

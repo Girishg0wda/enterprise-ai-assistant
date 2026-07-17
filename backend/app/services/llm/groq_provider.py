@@ -8,6 +8,11 @@ class GroqProvider(BaseLLMProvider):
         self.client = Groq(api_key=settings.GROQ_API_KEY)
         self.model = settings.GROQ_MODEL
 
+    # --- ADD THIS METHOD ALIAS ---
+    def generate(self, messages: List[Dict[str, str]], **kwargs: Any) -> str:
+        """Alias method to satisfy the agent orchestrator layout."""
+        return self.generate_response(messages, **kwargs)
+
     def generate_response(self, messages: List[Dict[str, str]], **kwargs: Any) -> str:
         completion = self.client.chat.completions.create(
             model=self.model, messages=messages, temperature=kwargs.get("temperature", 0.2), stream=False
